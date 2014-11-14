@@ -10,14 +10,6 @@ import (
 	"io"
 )
 
-type HashSet struct {
-	MD5     []byte
-	SHA1    []byte
-	SHA256  []byte
-	CRC32   uint32
-	Adler32 uint32
-}
-
 type writableHashSet struct {
 	writer            io.Writer
 	md5, sha1, sha256 hash.Hash

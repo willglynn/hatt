@@ -4,14 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 )
-
-type File struct {
-	Size    int64
-	ModTime time.Time
-	Hashes  HashSet
-}
 
 func NewFileFromPath(path string) (*File, error) {
 	// open the file
