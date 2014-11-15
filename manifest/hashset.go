@@ -35,11 +35,13 @@ func (whs *writableHashSet) Write(p []byte) (int, error) {
 }
 
 func (whs *writableHashSet) Sum() HashSet {
+	crc32 := whs.crc32.Sum32()
+	adler32 := whs.adler32.Sum32()
 	return HashSet{
 		MD5:     whs.md5.Sum(make([]byte, 0, 16)),
 		SHA1:    whs.sha1.Sum(make([]byte, 0, 20)),
 		SHA256:  whs.sha256.Sum(make([]byte, 0, 32)),
-		CRC32:   whs.crc32.Sum32(),
-		Adler32: whs.adler32.Sum32(),
+		CRC32:   &crc32,
+		Adler32: &adler32,
 	}
 }

@@ -413,11 +413,23 @@ func (z *HashSet) MarshalMsg(b []byte) (o []byte, err error) {
 
 	o = msgp.AppendString(o, "CRC32")
 
-	o = msgp.AppendUint32(o, z.CRC32)
+	if z.CRC32 == nil {
+		o = msgp.AppendNil(o)
+	} else {
+
+		o = msgp.AppendUint32(o, *z.CRC32)
+
+	}
 
 	o = msgp.AppendString(o, "Adler32")
 
-	o = msgp.AppendUint32(o, z.Adler32)
+	if z.Adler32 == nil {
+		o = msgp.AppendNil(o)
+	} else {
+
+		o = msgp.AppendUint32(o, *z.Adler32)
+
+	}
 
 	return
 }
@@ -464,19 +476,43 @@ func (z *HashSet) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 
 		case "CRC32":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.CRC32 = nil
+			} else {
+				if z.CRC32 == nil {
+					z.CRC32 = new(uint32)
+				}
 
-			z.CRC32, bts, err = msgp.ReadUint32Bytes(bts)
+				*z.CRC32, bts, err = msgp.ReadUint32Bytes(bts)
 
-			if err != nil {
-				return
+				if err != nil {
+					return
+				}
+
 			}
 
 		case "Adler32":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.Adler32 = nil
+			} else {
+				if z.Adler32 == nil {
+					z.Adler32 = new(uint32)
+				}
 
-			z.Adler32, bts, err = msgp.ReadUint32Bytes(bts)
+				*z.Adler32, bts, err = msgp.ReadUint32Bytes(bts)
 
-			if err != nil {
-				return
+				if err != nil {
+					return
+				}
+
 			}
 
 		default:
@@ -506,10 +542,22 @@ func (z *HashSet) Msgsize() (s int) {
 	s += msgp.BytesPrefixSize + len(z.SHA256)
 	s += msgp.StringPrefixSize + 5
 
-	s += msgp.Uint32Size
+	if z.CRC32 == nil {
+		s += msgp.NilSize
+	} else {
+
+		s += msgp.Uint32Size
+
+	}
 	s += msgp.StringPrefixSize + 7
 
-	s += msgp.Uint32Size
+	if z.Adler32 == nil {
+		s += msgp.NilSize
+	} else {
+
+		s += msgp.Uint32Size
+
+	}
 
 	return
 }
@@ -556,19 +604,43 @@ func (z *HashSet) DecodeMsg(dc *msgp.Reader) (err error) {
 			}
 
 		case "CRC32":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					return
+				}
+				z.CRC32 = nil
+			} else {
+				if z.CRC32 == nil {
+					z.CRC32 = new(uint32)
+				}
 
-			z.CRC32, err = dc.ReadUint32()
+				*z.CRC32, err = dc.ReadUint32()
 
-			if err != nil {
-				return
+				if err != nil {
+					return
+				}
+
 			}
 
 		case "Adler32":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					return
+				}
+				z.Adler32 = nil
+			} else {
+				if z.Adler32 == nil {
+					z.Adler32 = new(uint32)
+				}
 
-			z.Adler32, err = dc.ReadUint32()
+				*z.Adler32, err = dc.ReadUint32()
 
-			if err != nil {
-				return
+				if err != nil {
+					return
+				}
+
 			}
 
 		default:
@@ -628,10 +700,19 @@ func (z *HashSet) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 
-	err = en.WriteUint32(z.CRC32)
+	if z.CRC32 == nil {
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
 
-	if err != nil {
-		return
+		err = en.WriteUint32(*z.CRC32)
+
+		if err != nil {
+			return
+		}
+
 	}
 
 	err = en.WriteString("Adler32")
@@ -639,10 +720,19 @@ func (z *HashSet) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 
-	err = en.WriteUint32(z.Adler32)
+	if z.Adler32 == nil {
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
 
-	if err != nil {
-		return
+		err = en.WriteUint32(*z.Adler32)
+
+		if err != nil {
+			return
+		}
+
 	}
 
 	return
