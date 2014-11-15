@@ -1,0 +1,13 @@
+{
+	"Os": "linux darwin windows freebsd openbsd",
+	"PackageVersion": "0.1.0",
+	"PrereleaseInfo": "snapshot",
+	"TaskSettings": {
+		"bintray": {
+			"package": "hatt",
+			"repository": "github",
+			"subject": "willglynn"
+		}
+	},
+	"ConfigVersion": "0.9"
+}
