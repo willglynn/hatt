@@ -26,9 +26,10 @@ other tools, or they can be compared by hatt directly.`,
 }
 
 type hashOperation struct {
-	manifestPath string
-	threads      int
-	checksum     bool
+	manifestPath     string
+	threads          int
+	checksum         bool
+	thirtyTwoBitOnly bool
 
 	m *manifest.Manifest
 }
@@ -69,6 +70,13 @@ func (hash *hashOperation) run(cmd *cobra.Command, args []string) {
 		hash.threads = 1
 	}
 
+	hashOpts := manifest.HashOptions{}
+	if hash.thirtyTwoBitOnly {
+		hashOpts.DisableMD5 = true
+		hashOpts.DisableSHA1 = true
+		hashOpts.DisableSHA256 = true
+	}
+
 	// ensure we actually use the requested number of threads
 	if runtime.GOMAXPROCS(0) < hash.threads {
 		runtime.GOMAXPROCS(hash.threads)
@@ -92,7 +100,7 @@ func (hash *hashOperation) run(cmd *cobra.Command, args []string) {
 	signal.Notify(interrupt, syscall.SIGTERM)
 
 	// set up the hash workgroup
-	wg := workgroup.New(hash.threads)
+	wg := workgroup.New(hash.threads, hashOpts)
 	wgInput := wg.Input()
 	wgOutput := wg.Output()
 
@@ -180,6 +188,7 @@ loop:
 
 func init() {
 	HashCmd.PersistentFlags().StringVarP(&hash.manifestPath, "manifest", "m", "", "path to manifest file")
-	HashCmd.PersistentFlags().IntVarP(&hash.threads, "threads", "t", 0, "number of files to hash simultaneously")
+	HashCmd.PersistentFlags().IntVarP(&hash.threads, "threads", "t", 1, "number of files to hash simultaneously")
 	HashCmd.PersistentFlags().BoolVarP(&hash.checksum, "checksum", "c", false, "force checksum, even when size+mtime match")
+	HashCmd.PersistentFlags().BoolVar(&hash.thirtyTwoBitOnly, "32-bits-only", false, "compute only 32-bit checksums (fast)")
 }

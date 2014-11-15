@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func NewFileFromPath(path string) (*File, error) {
+func NewFileFromPath(path string, opts HashOptions) (*File, error) {
 	// open the file
 	if f, err := os.Open(path); err != nil {
 		return nil, err
@@ -24,7 +24,7 @@ func NewFileFromPath(path string) (*File, error) {
 
 		// calculate hashes for everything
 		// TODO: progress indicator
-		whs := newWritableHashSet()
+		whs := newWritableHashSet(opts)
 		n, err := io.Copy(whs, f)
 		if err != nil {
 			return nil, err

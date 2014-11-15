@@ -9,6 +9,7 @@ import (
 type Workgroup struct {
 	input     chan string
 	output    chan Result
+	opts      manifest.HashOptions
 	waitGroup sync.WaitGroup
 }
 
@@ -18,10 +19,11 @@ type Result struct {
 	File  *manifest.File
 }
 
-func New(n int) *Workgroup {
+func New(n int, opts manifest.HashOptions) *Workgroup {
 	wg := &Workgroup{
 		input:  make(chan string),
 		output: make(chan Result),
+		opts:   opts,
 	}
 
 	for i := 0; i < n; i++ {
@@ -47,7 +49,7 @@ func (wg *Workgroup) work() {
 			return
 		}
 
-		file, err := manifest.NewFileFromPath(path)
+		file, err := manifest.NewFileFromPath(path, wg.opts)
 		wg.output <- Result{
 			Path:  path,
 			Error: err,
