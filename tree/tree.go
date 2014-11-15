@@ -40,7 +40,7 @@ func (tw treeWalker) handleFileInfo(path string, fi os.FileInfo) {
 
 	} else {
 		// not a regular file; ignore
-		log.Printf("%q: not a regular file, ignoring")
+		log.Printf("%q: not a regular file, ignoring", path)
 	}
 }
 
