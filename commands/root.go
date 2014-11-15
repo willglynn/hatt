@@ -9,6 +9,8 @@ var RootCmd = &cobra.Command{
 }
 
 func init() {
+	RootCmd.AddCommand(ExportCmd)
+	RootCmd.AddCommand(FormatsCmd)
 	RootCmd.AddCommand(HashCmd)
 	RootCmd.AddCommand(VersionCmd)
 }

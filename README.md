@@ -10,6 +10,8 @@ Example
 
     cd /path/to/files
     hatt hash -m ../files.hatt
+    cd ..
+    hatt export -m files.hatt -o files.md5sum
 
 `hatt hash` is used to build a manifest, which includes information about all the files `hatt`
 has processed.
@@ -22,7 +24,20 @@ type of hash, odds are you already have it.
 `hatt` is designed for use on large, semi-static datasets. Therefore, in addition to hashes
 for each file, the manifest includes the file's modification time and size in bytes. By default,
 `hatt hash` skips files with matching mtime and size under the assumption that they haven't
-changed, greatly reducing overall I/O requirements. 
+changed, greatly reducing overall I/O requirements.
 
-`hatt` should really have a command to export a manifest in various formats, like `.md5` and
-`.sfv`, but it doesn't do that yet.
+`hatt hash` can be interrupted with SIGINT (`^C`), in which case it writes the in-progress
+manifest and terminates.
+
+`hatt hash` supports multithreading, i.e. `-t 4`/`--threads=8`. This should probably be 1-2 if
+you're using rotational storage (i.e. a hard drive), since reading more files at once will just
+cause your drive to spend more time seeking. On the other hand, if you're on a disk array or an
+SSD, consider setting it to the number of CPUs in your machine for maximum performance.
+
+Interoperability
+----------------
+
+`hatt` doesn't exist in a vacuum; there's lots of other tools that do similar things. `hatt`
+manifests aren't really useful outside of `hatt`, but `hatt` can talk to other formats.
+
+Check `hatt help export` or `hatt formats` for more.
