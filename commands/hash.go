@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -20,17 +21,74 @@ var HashCmd = &cobra.Command{
 
 The 'hash' command generates a manifest, which describes all the files it
 hashed. Manifests can be exported in a number of formats for comparison by
-other tools, or they can be compared by hatt directly.`,
+other tools, or they can be compared by hatt directly.
+
+'hash' will:
+  * create a new manifest if needed
+  * add files to the manifest for each file found on disk
+  * update files that are already in the manifest iff the size+mtime differ
+    (modified by --checksum/-c)
+  * silently ignore files that exist in the manifest but not on disk
+    (modified by --missing=log or --missing=remove)
+  * use one thread for hashing
+    (modified by --threads/-t)
+  * use nontrivial amounts of CPU time to calculate many different hashes
+  	(modified by --32-bits-only/-c)
+  * write out the work-in-progess manifest when interrupted (i.e. ^C)`,
 
 	Run: hash.run,
 }
 
+// what do we do with missing things?
+type hashMissingAction int
+
+const (
+	hashMissingIgnore hashMissingAction = iota
+	hashMissingLog
+	hashMissingRemove
+)
+
+func (hma hashMissingAction) String() string {
+	switch hma {
+	case hashMissingIgnore:
+		return "ignore"
+	case hashMissingLog:
+		return "log"
+	case hashMissingRemove:
+		return "remove"
+	default:
+		return ""
+	}
+}
+
+func (hma *hashMissingAction) Set(value string) error {
+	switch value {
+	case "ignore":
+		*hma = hashMissingIgnore
+	case "log":
+		*hma = hashMissingLog
+	case "remove":
+		*hma = hashMissingRemove
+
+	default:
+		return fmt.Errorf("expected 'ignore', 'log', 'remove'; got %q", value)
+	}
+	return nil
+}
+
+func (hma *hashMissingAction) Type() string {
+	return "hash missing action"
+}
+
 type hashOperation struct {
+	// configuration
 	manifestPath     string
 	threads          int
 	checksum         bool
 	thirtyTwoBitOnly bool
+	missingAction    hashMissingAction
 
+	// runtime state
 	m *manifest.Manifest
 }
 
@@ -47,7 +105,9 @@ func (hash *hashOperation) shouldQueue(entry tree.Entry) bool {
 
 		if manifestEntry.Size == entry.Size && manifestEntry.ModTime == entry.ModTime {
 			// size and mtime match
-			// don't bother re-checking
+			// don't bother re-checking, but update the manifest indicating that we found it
+			manifestEntry.Seen = true
+			hash.m.Files[entry.Path] = manifestEntry
 			return false
 		}
 
@@ -55,52 +115,50 @@ func (hash *hashOperation) shouldQueue(entry tree.Entry) bool {
 		return true
 	} else {
 		// path does not exist in manifest
+		// hash it
 		return true
 	}
 }
 
-func (hash *hashOperation) run(cmd *cobra.Command, args []string) {
-	if hash.manifestPath == "" {
-		cmd.Usage()
-		log.Fatal("manifest file must be specified")
-		return
-	}
-
-	if hash.threads <= 0 {
-		hash.threads = 1
-	}
-
+func (hash *hashOperation) manifestHashOptions() manifest.HashOptions {
 	hashOpts := manifest.HashOptions{}
+
 	if hash.thirtyTwoBitOnly {
 		hashOpts.DisableMD5 = true
 		hashOpts.DisableSHA1 = true
 		hashOpts.DisableSHA256 = true
 	}
 
-	// ensure we actually use the requested number of threads
-	if runtime.GOMAXPROCS(0) < hash.threads {
-		runtime.GOMAXPROCS(hash.threads)
+	return hashOpts
+}
+
+func (hash *hashOperation) handleUnseenEntries() {
+	// bail early if there's nothing to do
+	if hash.missingAction == hashMissingIgnore {
+		return
 	}
 
-	// open the manifest, ignorning not found errors
-	if m, err := manifest.ReadFromFile(hash.manifestPath); err != nil && !os.IsNotExist(err) {
-		log.Fatalf("error reading manifest file %q: %v", hash.manifestPath, err)
-	} else {
-		hash.m = m
+	// walk the manifest, removing any entries that aren't Seen
+	for key, entry := range hash.m.Files {
+		if !entry.Seen {
+			if hash.missingAction == hashMissingLog {
+				log.Printf("%q does not exist locally but exists in manifest", key)
+			} else {
+				delete(hash.m.Files, key)
+				log.Printf("removed %q from manifest", key)
+			}
+		}
 	}
+}
 
-	// create a new manifest if needed
-	if hash.m == nil {
-		hash.m = manifest.New()
-	}
-
+func (hash *hashOperation) hashAllTheThings() bool {
 	// trap signals to close down gracefully (i.e. preserving work)
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	signal.Notify(interrupt, syscall.SIGTERM)
 
 	// set up the hash workgroup
-	wg := workgroup.New(hash.threads, hashOpts)
+	wg := workgroup.New(hash.threads, hash.manifestHashOptions())
 	wgInput := wg.Input()
 	wgOutput := wg.Output()
 
@@ -108,9 +166,7 @@ func (hash *hashOperation) run(cmd *cobra.Command, args []string) {
 	walk := tree.Walk(".")
 
 	// do all the things!
-	interrupted := false
 	pending := make([]string, 0, 20)
-loop:
 	for {
 		// close wgInput if we're done walking and there's nothing else to send
 		if walk == nil && wgInput != nil && len(pending) == 0 {
@@ -136,9 +192,8 @@ loop:
 
 		select {
 		case <-interrupt:
-			interrupted = true
 			log.Println("interrupted; aborting...")
-			break loop
+			return true
 
 		case entry, ok := <-recvWalk:
 			if !ok {
@@ -161,7 +216,7 @@ loop:
 		case hashedFile, ok := <-wgOutput:
 			if !ok {
 				// workgroup is done
-				break loop
+				return false
 			} else {
 				if hashedFile.Error != nil {
 					// failed to hash this file
@@ -170,10 +225,50 @@ loop:
 					// got a hashed file
 					// add it to the manifest
 					log.Printf("hashed %q (%d bytes)", hashedFile.Path, hashedFile.File.Size)
-					hash.m.Files[hashedFile.Path] = *hashedFile.File
+
+					manifestEntry := *hashedFile.File
+					manifestEntry.Seen = true
+					hash.m.Files[hashedFile.Path] = manifestEntry
 				}
 			}
 		}
+	}
+}
+
+func (hash *hashOperation) run(cmd *cobra.Command, args []string) {
+	if hash.manifestPath == "" {
+		cmd.Usage()
+		log.Fatal("manifest file must be specified")
+		return
+	}
+
+	if hash.threads <= 0 {
+		hash.threads = 1
+	}
+
+	// ensure we actually use the requested number of threads
+	if runtime.GOMAXPROCS(0) < hash.threads {
+		runtime.GOMAXPROCS(hash.threads)
+	}
+
+	// open the manifest, ignorning not found errors
+	if m, err := manifest.ReadFromFile(hash.manifestPath); err != nil && !os.IsNotExist(err) {
+		log.Fatalf("error reading manifest file %q: %v", hash.manifestPath, err)
+	} else {
+		hash.m = m
+	}
+
+	// create a new manifest if needed
+	if hash.m == nil {
+		hash.m = manifest.New()
+	}
+
+	// run the main loop
+	interrupted := hash.hashAllTheThings()
+
+	// handle unseen entries iff we finished normally
+	if !interrupted {
+		hash.handleUnseenEntries()
 	}
 
 	// write the manifest
@@ -191,4 +286,5 @@ func init() {
 	HashCmd.PersistentFlags().IntVarP(&hash.threads, "threads", "t", 1, "number of files to hash simultaneously")
 	HashCmd.PersistentFlags().BoolVarP(&hash.checksum, "checksum", "c", false, "force checksum, even when size+mtime match")
 	HashCmd.PersistentFlags().BoolVar(&hash.thirtyTwoBitOnly, "32-bits-only", false, "compute only 32-bit checksums (fast)")
+	HashCmd.PersistentFlags().Var(&hash.missingAction, "missing", "action to perform for missing files (ignore, log, remove)")
 }

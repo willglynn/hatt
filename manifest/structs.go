@@ -12,6 +12,7 @@ type File struct {
 	Size    int64
 	ModTime time.Time
 	Hashes  HashSet
+	Seen    bool `msg:"-"` // used for hash tracking; don't serialize
 }
 
 type HashSet struct {
